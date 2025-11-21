@@ -1,0 +1,5 @@
+{
+  "name": "Four-Stroke Engine Visualizer",
+  "description": "An interactive 3D educational tool demonstrating the four-stroke internal combustion engine cycle: Intake, Compression, Power, and Exhaust.",
+  "requestFramePermissions": []
+}
