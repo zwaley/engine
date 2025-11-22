@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cylinder, Box, Sphere, Cone } from '@react-three/drei';
+import { Cylinder, Box, Sphere, Cone, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 import { StrokeState } from '../types';
 
@@ -94,35 +94,46 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
   switch (currentStroke) {
     case StrokeState.Intake:
       // Cool fresh air (Cyan/Blue)
-      gasColor.set("#22d3ee"); 
+      gasColor.set("#0ea5e9"); // Vivid Sky Blue
       gasOpacity = 0.3;
       break;
     case StrokeState.Compression:
       // Heating up (Blue -> Orange)
       gasColor.set("#38bdf8").lerp(new THREE.Color("#f59e0b"), (cycleAngle - Math.PI) / Math.PI);
-      gasOpacity = 0.5 + (0.3 * ((cycleAngle - Math.PI) / Math.PI)); // Get denser
+      gasOpacity = 0.4 + (0.4 * ((cycleAngle - Math.PI) / Math.PI)); // Get denser
       gasEmissive.set("#f59e0b");
-      gasEmissiveIntensity = 0.2 * ((cycleAngle - Math.PI) / Math.PI);
+      gasEmissiveIntensity = 0.5 * ((cycleAngle - Math.PI) / Math.PI);
       break;
     case StrokeState.Power:
-      // Explosion (Red/Orange -> Fade)
-      gasColor.set("#ef4444");
+      // Explosion (White/Yellow -> Orange -> Red)
       const powerProgress = (cycleAngle - 2 * Math.PI) / Math.PI;
-      gasOpacity = 0.9 * (1 - powerProgress);
-      gasEmissive.set("#ef4444");
-      gasEmissiveIntensity = 1.5 * (1 - powerProgress); // Flash!
+      
+      if (powerProgress < 0.15) {
+        // Initial Flash (White-Yellow)
+        gasColor.set("#ffff00");
+        gasEmissive.set("#ffffaa");
+        gasEmissiveIntensity = 4.0; // Intense Flash
+        gasOpacity = 0.9;
+      } else {
+        // Cooling down to red
+        const coolDown = (powerProgress - 0.15) / 0.85;
+        gasColor.set("#f59e0b").lerp(new THREE.Color("#ef4444"), coolDown);
+        gasEmissive.set("#ff4400").lerp(new THREE.Color("#330000"), coolDown);
+        gasEmissiveIntensity = 2.0 * (1 - coolDown);
+        gasOpacity = 0.8 * (1 - coolDown);
+      }
       break;
     case StrokeState.Exhaust:
-      // Dirty Smoke (Grey)
-      gasColor.set("#94a3b8");
-      gasOpacity = 0.4;
+      // Dirty Smoke (Grey/Dark)
+      gasColor.set("#64748b");
+      gasOpacity = 0.5;
       break;
   }
 
   if (isSparking) {
     gasColor.set("#fff700");
     gasEmissive.set("#fff700");
-    gasEmissiveIntensity = 3;
+    gasEmissiveIntensity = 5;
     gasOpacity = 1.0;
   }
 
@@ -141,34 +152,60 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
           onPointerOut={handleUnhover}
         >
           <meshPhysicalMaterial 
-            color="#ffffff" 
+            color="#e0f2fe" // Slight blue tint glass
             transparent 
-            opacity={0.1} 
+            opacity={0.2} 
             metalness={0.1} 
             roughness={0.1} 
             side={THREE.DoubleSide}
-            transmission={0.5}
+            transmission={0.9}
             thickness={0.1}
+            clearcoat={1}
           />
         </Cylinder>
         
         {/* Cylinder Edges for definition */}
         <Cylinder args={[cylinderRadius + 0.02, cylinderRadius + 0.02, cylinderHeight, 32, 1, true]} position={[0,0,0]}>
-           <meshBasicMaterial wireframe color="#334155" transparent opacity={0.1} />
+           <meshBasicMaterial wireframe color="#94a3b8" transparent opacity={0.2} />
         </Cylinder>
 
         {/* Combustion Chamber / Gas Volume */}
-        {/* Using meshBasicMaterial or Standard with high emissive for glow */}
-        <Cylinder args={[pistonRadius - 0.02, pistonRadius - 0.02, gasHeight, 32]} position={[0, gasY - 5.5, 0]}>
-          <meshStandardMaterial 
-            color={gasColor} 
-            emissive={gasEmissive}
-            emissiveIntensity={gasEmissiveIntensity}
-            transparent 
-            opacity={gasOpacity} 
-            depthWrite={false} // Important for rendering inside transparent glass
-          />
-        </Cylinder>
+        <group position={[0, gasY - 5.5, 0]}>
+          <Cylinder args={[pistonRadius - 0.02, pistonRadius - 0.02, gasHeight, 32]}>
+            <meshStandardMaterial 
+              color={gasColor} 
+              emissive={gasEmissive}
+              emissiveIntensity={gasEmissiveIntensity}
+              transparent 
+              opacity={gasOpacity} 
+              depthWrite={false}
+            />
+          </Cylinder>
+          
+          {/* Explosion Effects */}
+          {currentStroke === StrokeState.Power && (
+            <>
+              {/* Dynamic Explosion Light inside the cylinder */}
+              <pointLight 
+                intensity={8 * gasEmissiveIntensity} 
+                color="#ffaa00" 
+                distance={6} 
+                decay={2} 
+              />
+              
+              {/* Explosion Particles */}
+              <Sparkles 
+                count={30}
+                scale={[pistonRadius * 1.2, gasHeight * 0.8, pistonRadius * 1.2]}
+                size={15}
+                speed={3}
+                opacity={gasOpacity}
+                color={gasColor}
+                noise={1}
+              />
+            </>
+          )}
+        </group>
       </group>
 
       {/* --- Cylinder Head --- */}
@@ -178,7 +215,7 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
         onPointerOut={handleUnhover}
       >
         <Box args={[5, 0.5, 5]}>
-           <meshStandardMaterial {...highlightMaterialProps('head', "#334155", 0.7, 0.2)} />
+           <meshStandardMaterial {...highlightMaterialProps('head', "#cbd5e1", 0.5, 0.2)} />
         </Box>
         
         {/* Spark Plug */}
@@ -194,11 +231,11 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
             <meshStandardMaterial 
               color={isSparking ? "#ffff00" : "#333"} 
               emissive={isSparking ? "#ffff00" : "#000"}
-              emissiveIntensity={isSparking ? 2 : 0}
+              emissiveIntensity={isSparking ? 5 : 0}
             />
           </Sphere>
           {isSparking && (
-             <pointLight position={[0, -0.5, 0]} intensity={8} color="#ffaa00" distance={6} decay={2} />
+             <pointLight position={[0, -0.5, 0]} intensity={10} color="#ffff00" distance={8} decay={2} />
           )}
         </group>
 
@@ -215,7 +252,7 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
              <meshStandardMaterial 
                {...highlightMaterialProps(
                  'intakeValve', 
-                 cycleAngle < Math.PI ? "#60a5fa" : "#94a3b8"
+                 cycleAngle < Math.PI ? "#3b82f6" : "#94a3b8"
                )} 
              />
           </Cone>
@@ -243,21 +280,23 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
 
       {/* --- Moving Parts --- */}
       
-      {/* Piston - Bright Silver */}
+      {/* Piston - Shiny Chrome */}
       <group 
         position={[0, pistonY, 0]}
         onPointerOver={(e) => handleHover(e, 'piston')}
         onPointerOut={handleUnhover}
       >
         <Cylinder args={[pistonRadius, pistonRadius, pistonHeight, 32]}>
-          <meshStandardMaterial {...highlightMaterialProps('piston', "#f8fafc", 0.9, 0.2)} />
+          <meshStandardMaterial 
+             {...highlightMaterialProps('piston', "#ffffff", 1.0, 0.1)} 
+          />
         </Cylinder>
         {/* Piston Rings */}
         <Cylinder args={[pistonRadius + 0.01, pistonRadius + 0.01, 0.1, 32]} position={[0, 0.4, 0]}>
-           <meshStandardMaterial color="#333" />
+           <meshStandardMaterial color="#334155" metalness={0.5} />
         </Cylinder>
         <Cylinder args={[pistonRadius + 0.01, pistonRadius + 0.01, 0.1, 32]} position={[0, 0.1, 0]}>
-           <meshStandardMaterial color="#333" />
+           <meshStandardMaterial color="#334155" metalness={0.5} />
         </Cylinder>
         
         {/* Piston Pin Area */}
@@ -266,7 +305,7 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
         </Cylinder>
       </group>
 
-      {/* Connecting Rod - Darker Steel */}
+      {/* Connecting Rod - Brushed Metal */}
       <group 
         position={[0, pistonY, 0]}
         onPointerOver={(e) => handleHover(e, 'rod')}
@@ -274,16 +313,16 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
       >
         <group rotation={[0, 0, rodAngle]}>
           <Box args={[0.5, l, 0.4]} position={[0, -l / 2, 0]}>
-             <meshStandardMaterial {...highlightMaterialProps('rod', "#64748b", 0.7, 0.4)} />
+             <meshStandardMaterial {...highlightMaterialProps('rod', "#94a3b8", 0.8, 0.3)} />
           </Box>
            {/* Rod bearings visual */}
           <Cylinder args={[0.5, 0.5, 0.45, 16]} rotation={[Math.PI/2, 0, 0]} position={[0, -l, 0]}>
-              <meshStandardMaterial {...highlightMaterialProps('rod', "#475569")} />
+              <meshStandardMaterial {...highlightMaterialProps('rod', "#64748b")} />
           </Cylinder>
         </group>
       </group>
 
-      {/* Crankshaft - Industrial Dark Metal */}
+      {/* Crankshaft - Industrial Steel */}
       <group 
         position={[0, 0, 0]} 
         rotation={[0, 0, 0]}
@@ -292,34 +331,25 @@ const EngineModel: React.FC<EngineModelProps> = ({ angle, currentStroke, onHover
       >
         {/* Main Shaft */}
         <Cylinder args={[0.4, 0.4, 3, 16]} rotation={[Math.PI / 2, 0, 0]}>
-           <meshStandardMaterial {...highlightMaterialProps('crank', "#334155", 0.8, 0.4)} />
+           <meshStandardMaterial {...highlightMaterialProps('crank', "#475569", 0.9, 0.3)} />
         </Cylinder>
         
         <group rotation={[0, 0, -crankRotation]}> 
            {/* Counterweights */}
            <Box args={[1.2, r * 1.2, 0.4]} position={[0, -r/2, 0.6]}>
-              <meshStandardMaterial {...highlightMaterialProps('crank', "#1e293b", 0.7, 0.5)} />
+              <meshStandardMaterial {...highlightMaterialProps('crank', "#334155", 0.8, 0.4)} />
            </Box>
            <Box args={[1.2, r * 1.2, 0.4]} position={[0, -r/2, -0.6]}>
-              <meshStandardMaterial {...highlightMaterialProps('crank', "#1e293b", 0.7, 0.5)} />
+              <meshStandardMaterial {...highlightMaterialProps('crank', "#334155", 0.8, 0.4)} />
            </Box>
 
             {/* Crank Pin */}
            <Cylinder args={[0.38, 0.38, 1.6, 16]} position={[0, r, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <meshStandardMaterial {...highlightMaterialProps('crank', "#e2e8f0", 0.8)} />
+              <meshStandardMaterial {...highlightMaterialProps('crank', "#cbd5e1", 0.9, 0.2)} />
            </Cylinder>
            
            {/* Arms connecting shaft to pin */}
            <Box args={[1.0, r + 1, 0.4]} position={[0, r/2, 0.6]}>
-             <meshStandardMaterial {...highlightMaterialProps('crank', "#334155")} />
+             <meshStandardMaterial {...highlightMaterialProps('crank', "#475569")} />
            </Box>
-           <Box args={[1.0, r + 1, 0.4]} position={[0, r/2, -0.6]}>
-             <meshStandardMaterial {...highlightMaterialProps('crank', "#334155")} />
-           </Box>
-        </group>
-      </group>
-    </group>
-  );
-};
-
-export default EngineModel;
+           <Box args={[1.0, r + 1, 0.4]} position={[0, r/2,
